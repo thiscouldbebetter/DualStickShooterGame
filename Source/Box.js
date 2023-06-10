@@ -21,7 +21,7 @@ class Box
 		return pointToCheck.isInRangeMinMax(this.min(), this.max() );
 	}
 
-	overlapWith(other)
+	overlapsWith(other)
 	{
 		var thisMin = this.min();
 		var thisMax = this.max();

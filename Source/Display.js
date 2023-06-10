@@ -32,10 +32,23 @@ class Display
 		);
 	}
 
+	drawCircleWithCenterRadiusAndColor(center, radius, color)
+	{
+		var g = this.graphics;
+		g.fillStyle = color.systemColor;
+		g.beginPath();
+		g.arc
+		(
+			center.x, center.y, radius, 0, Math.PI * 2
+		);
+		g.fill();
+	}
+
 	drawRectangleAtPosWithSizeAndColor(pos, size, color)
 	{
-		this.graphics.fillStyle = color.systemColor;
-		this.graphics.fillRect
+		var g = this.graphics;
+		g.fillStyle = color.systemColor;
+		g.fillRect
 		(
 			pos.x, pos.y, size.x, size.y
 		);

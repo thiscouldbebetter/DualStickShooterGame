@@ -1,13 +1,6 @@
 
 class Visual
 {
-	constructor(name, colorName, size)
-	{
-		this.name = name;
-		this.colorName = colorName;
-		this.size = size;
-	}
-
 	static byName(name)
 	{
 		return Visual.Instances().byName(name);
@@ -21,51 +14,51 @@ class Visual
 		}
 		return Visual._instances;
 	}
-
-	color()
-	{
-		return Color.byName(this.colorName);
-	}
-
-	drawToDisplayAtPos(display, pos)
-	{
-		display.drawRectangleWithCenterSizeAndColor
-		(
-			pos, this.size, this.color()
-		);
-	}
 }
 
 class Visual_Instances
 {
 	constructor()
 	{
-		this.EnemyBoss = new Visual
+		var colors = Color.Instances();
+
+		var radiusPlayer = 8;
+
+		var enemyBoss = VisualBuilder.faceOfColorWithRadius
 		(
-			"EnemyBoss",
-			"Red",
-			new Coords(48, 48) // size
+			colors.Red, radiusPlayer * 3
 		);
 
-		this.EnemyCharger = new Visual
+		this.EnemyBoss = new VisualNamed
 		(
-			"EnemyCharger",
-			"Red",
-			new Coords(16, 16) // size
+			"EnemyBoss", enemyBoss
 		);
 
-		this.Player = new Visual
+		var enemyCharger = VisualBuilder.faceOfColorWithRadius
 		(
-			"Player",
-			"Gray",
-			new Coords(16, 16) // size
+			colors.Red, radiusPlayer
 		);
 
-		this.Projectile = new Visual
+		this.EnemyCharger = new VisualNamed
+		(
+			"EnemyCharger", enemyCharger
+		);
+
+		var player = VisualBuilder.faceOfColorWithRadius(colors.Gray, 8);
+
+		this.Player = new VisualNamed
+		(
+			"Player", player
+		);
+
+		this.Projectile = new VisualNamed
 		(
 			"Projectile",
-			"Yellow",
-			new Coords(2, 2) // size
+			new VisualCircle
+			(
+				"Yellow",
+				1 // radius
+			)
 		);
 
 		this._All =
@@ -76,7 +69,7 @@ class Visual_Instances
 			this.Projectile
 		];
 
-		this._AllByName = new Map(this._All.map(x => [x.name, x]) );
+		this._AllByName = new Map(this._All.map(x => [x.name, x] ) );
 	}
 
 	byName(name)

@@ -6,14 +6,14 @@ class MoverDefn
 		name,
 		integrityMax,
 		speed,
-		size,
+		collider,
 		visualName,
 		activityDefnName
 	)
 	{
 		this.name = name;
 		this.speed = speed;
-		this.size = size;
+		this.collider = collider;
 		this.integrityMax = integrityMax;
 		this.visualName = visualName;
 		this.activityDefnName = activityDefnName;
@@ -51,15 +51,27 @@ class MoverDefn_Instances
 		var activityDefns = ActivityDefn.Instances();
 		var visuals = Visual.Instances();
 
-		var sizeShip = new Coords(16, 16);
-		var sizeProjectile = new Coords(2, 2);
+		var colliderBoss = new Sphere
+		(
+			new Coords(), 16
+		);
+
+		var colliderProjectile = new Sphere
+		(
+			new Coords(), 1
+		);
+
+		var colliderShip = new Sphere
+		(
+			new Coords(), 8
+		);
 
 		this.EnemyBoss = new MoverDefn
 		(
 			"EnemyBoss",
 			20, // integrityMax
 			1, // speed
-			sizeShip,
+			colliderBoss,
 			visuals.EnemyBoss.name, // visualName
 			activityDefns.StayAtTopCenterShooting.name
 		);
@@ -69,7 +81,7 @@ class MoverDefn_Instances
 			"EnemyCharger",
 			1, // integrityMax
 			4, // speed
-			sizeShip,
+			colliderShip,
 			visuals.EnemyCharger.name,
 			activityDefns.MoveForward.name
 		);
@@ -79,7 +91,7 @@ class MoverDefn_Instances
 			"Player",
 			1, // integrityMax
 			4, // speed
-			sizeShip,
+			colliderShip,
 			visuals.Player.name,
 			activityDefns.UserInputAccept.name
 		);
@@ -89,7 +101,7 @@ class MoverDefn_Instances
 			"Projectile",
 			1, // integrityMax
 			8, // speed,
-			sizeProjectile,
+			colliderProjectile,
 			visuals.Projectile.name,
 			activityDefns.MoveForward.name
 		);

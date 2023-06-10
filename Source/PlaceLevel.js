@@ -176,7 +176,7 @@ class PlaceLevel
 				moverEnemy =>
 				{
 					var moverEnemyBounds = moverEnemy.bounds();
-					var doMoversCollide = moverEnemyBounds.overlapWith
+					var doMoversCollide = moverEnemyBounds.overlapsWith
 					(
 						moverPlayerBounds
 					);

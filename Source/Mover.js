@@ -19,9 +19,10 @@ class Mover
 	{
 		if (this._bounds == null)
 		{
-			this._bounds = Box.fromCenterAndSize
+			var defn = this.defn();
+			this._bounds = Sphere.fromCenterAndRadius
 			(
-				this.disp.pos, this.defn().size
+				this.disp.pos, defn.collider.radius
 			);
 		}
 
@@ -37,7 +38,7 @@ class Mover
 	{
 		var defn = this.defn();
 		var visual = defn.visual();
-		visual.drawToDisplayAtPos(display, this.disp.pos);
+		visual.draw(display, this);
 	}
 
 	initialize()

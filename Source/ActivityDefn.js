@@ -21,9 +21,9 @@ class ActivityDefn
 		return ActivityDefn._instances;
 	}
 
-	perform(universe, world, place, entityActing)
+	perform(universe, world, place, moverActing)
 	{
-		this._perform(universe, world, place, entityActing);
+		this._perform(universe, world, place, moverActing);
 	}
 }
 
@@ -71,11 +71,12 @@ class ActivityDefn_Instances
 						var headingInTurns = e.disp.headingInTurns;
 						var headingOffset = (Math.random() * 2 - 1) / 8;
 						projectileDisp.headingInTurns += headingOffset;
+						var eDefn = e.defn();
 						projectileDisp.pos.add
 						(
 							e.disp.headingAsCoords().multiplyScalar
 							(
-								e.defn().size.y
+								eDefn.collider.radius
 							)
 						);
 						var moverProjectile = new Mover
@@ -111,23 +112,28 @@ class ActivityDefn_Instances
 					{
 						if (key.startsWith("Arrow") )
 						{
-							var pos = e.disp.pos;
+							var disp = e.disp;
+							var pos = disp.pos;
 							var speed = e.defn().speed;
 
 							if (key.endsWith("Down") )
 							{
+								disp.headingInTurns = .25;
 								pos.addXY(0, speed);
 							}
 							else if (key.endsWith("Left") )
 							{
+								disp.headingInTurns = .5;
 								pos.addXY(-speed, 0);
 							}
 							else if (key.endsWith("Right") )
 							{
+								disp.headingInTurns = 0;
 								pos.addXY(speed, 0);
 							}
 							else if (key.endsWith("Up") )
 							{
+								disp.headingInTurns = .75;
 								pos.addXY(0, 0 - speed);
 							}
 						}
