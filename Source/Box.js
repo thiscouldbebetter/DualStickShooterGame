@@ -1,5 +1,5 @@
 
-class Bounds
+class Box
 {
 	constructor(center, size)
 	{
@@ -13,7 +13,7 @@ class Bounds
 
 	static fromCenterAndSize(center, size)
 	{
-		return new Bounds(center, size);
+		return new Box(center, size);
 	}
 
 	containsPoint(pointToCheck)

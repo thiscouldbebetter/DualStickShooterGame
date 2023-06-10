@@ -19,7 +19,7 @@ class Mover
 	{
 		if (this._bounds == null)
 		{
-			this._bounds = Bounds.fromCenterAndSize
+			this._bounds = Box.fromCenterAndSize
 			(
 				this.disp.pos, this.defn().size
 			);
