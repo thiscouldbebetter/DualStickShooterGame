@@ -1,0 +1,1245 @@
+<html>
+<body>
+
+<div id="divUi">
+	<h3>Dual-Stick Shooter Game</h3>
+
+	<p>
+		Use the arrow keys to move around,
+		and the W, A, S, and D keys to fire.
+	</p>
+
+	<div id="divDisplay"></div>
+</div>
+
+<script type="text/javascript">
+
+class Game
+{
+	run()
+	{
+		var universe = Universe.demo();
+		universe.initialize();
+	}
+}
+
+// Classes.
+
+class ActivityDefn
+{
+	constructor(name, perform)
+	{
+		this.name = name;
+		this._perform = perform;
+	}
+
+	static byName(name)
+	{
+		return ActivityDefn.Instances().byName(name);
+	}
+
+	static Instances()
+	{
+		if (ActivityDefn._instances == null)
+		{
+			ActivityDefn._instances = new ActivityDefn_Instances();
+		}
+		return ActivityDefn._instances;
+	}
+
+	perform(universe, world, place, entityActing)
+	{
+		this._perform(universe, world, place, entityActing);
+	}
+}
+
+class ActivityDefn_Instances
+{
+	constructor()
+	{
+		this.DoNothing = new ActivityDefn
+		(
+			"DoNothing",
+			(u, w, p, e) => {}
+		);
+
+		this.MoveForward = new ActivityDefn
+		(
+			"MoveForward",
+			(u, w, p, e) =>
+			{
+				var defn = e.defn();
+				var vel = e.disp.headingAsCoords();
+				vel.multiplyScalar(defn.speed);
+				e.disp.pos.add(vel);
+			}
+		);
+
+		this.StayAtTopCenterShooting = new ActivityDefn
+		(
+			"StayAtTopCenterShooting",
+			(u, w, p, e) =>
+			{
+				var posMover = e.disp.pos;
+				var posTarget = new Coords(.5, .2).multiply(p.size);
+				var displacementToTarget = posTarget.clone().subtract(posMover);
+				var distanceToTarget = displacementToTarget.magnitude();
+				var speed = e.defn().speed;
+				if (distanceToTarget < speed)
+				{
+					posMover.overwriteWith(posTarget);
+					var ticksPerShot = 10;
+					var tick = p.ticksSoFar;
+					var canFire = (tick % ticksPerShot) == 0;
+					if (canFire)
+					{
+						var projectileDisp = e.disp.clone();
+						var headingInTurns = e.disp.headingInTurns;
+						var headingOffset = (Math.random() * 2 - 1) / 8;
+						projectileDisp.headingInTurns += headingOffset;
+						projectileDisp.pos.add
+						(
+							e.disp.headingAsCoords().multiplyScalar
+							(
+								e.defn().size.y
+							)
+						);
+						var moverProjectile = new Mover
+						(
+							p.moverIdMaxSoFar++,
+							MoverDefn.Instances().Projectile.name,
+							projectileDisp
+						);
+						p.movers.push(moverProjectile);
+					}
+				}
+				else
+				{
+					var vel = displacementToTarget.normalize().multiplyScalar(speed);
+					posMover.add(vel);
+				}
+			}
+		);
+
+		this.UserInputAccept = new ActivityDefn
+		(
+			"UserInputAccept",
+			(u, w, p, e) =>
+			{
+				var inputTracker = u.inputTracker;
+				var keysPressed = inputTracker.keysPressed;
+
+				var keysForFiring = [ "a", "d", "s", "w" ];
+
+				keysPressed.forEach
+				(
+					key =>
+					{
+						if (key.startsWith("Arrow") )
+						{
+							var pos = e.disp.pos;
+							var speed = e.defn().speed;
+
+							if (key.endsWith("Down") )
+							{
+								pos.addXY(0, speed);
+							}
+							else if (key.endsWith("Left") )
+							{
+								pos.addXY(-speed, 0);
+							}
+							else if (key.endsWith("Right") )
+							{
+								pos.addXY(speed, 0);
+							}
+							else if (key.endsWith("Up") )
+							{
+								pos.addXY(0, 0 - speed);
+							}
+						}
+						else if (keysForFiring.indexOf(key) >= 0)
+						{
+							inputTracker.keyRelease(key);
+							var headingToFireIn = null;
+
+							if (key == "a")
+							{
+								headingToFireIn = .5;
+							}
+							else if (key == "d")
+							{
+								headingToFireIn = 0;
+							}
+							else if (key == "s")
+							{
+								headingToFireIn = .25;
+							}
+							else if (key == "w")
+							{
+								headingToFireIn = .75;
+							}
+
+							var projectileDisp = e.disp.clone();
+
+							projectileDisp.headingInTurns = headingToFireIn;
+
+							var projectileSpawnDistance = 10;
+
+							var directionToFireIn  =
+								Coords.fromHeadingInTurns(headingToFireIn);
+
+							var projectileOffset =
+								directionToFireIn.multiplyScalar
+								(
+									projectileSpawnDistance
+								);
+
+							projectileDisp.pos.add
+							(
+								projectileOffset
+							);
+
+							var moverProjectile = new Mover
+							(
+								p.moverIdMaxSoFar++,
+								MoverDefn.Instances().Projectile.name,
+								projectileDisp
+							);
+
+							p.movers.push(moverProjectile);
+						}
+					}
+				);
+			}
+		);
+
+		this._All =
+		[
+			this.DoNothing,
+			this.MoveForward,
+			this.StayAtTopCenterShooting,
+			this.UserInputAccept
+		];
+
+		this._AllByName = new Map(this._All.map(x => [x.name, x]) );
+	}
+
+	byName(name)
+	{
+		return this._AllByName.get(name);
+	}
+}
+
+class Bounds
+{
+	constructor(center, size)
+	{
+		this.center = center;
+		this.size = size;
+
+		this._sizeHalf = this.size.clone().half();
+		this._min = Coords.zeroes();
+		this._max = Coords.zeroes();
+	}
+
+	static fromCenterAndSize(center, size)
+	{
+		return new Bounds(center, size);
+	}
+
+	containsPoint(pointToCheck)
+	{
+		return pointToCheck.isInRangeMinMax(this.min(), this.max() );
+	}
+
+	overlapWith(other)
+	{
+		var thisMin = this.min();
+		var thisMax = this.max();
+		var otherMin = other.min();
+		var otherMax = other.max();
+
+		var doOverlapInX =
+		(
+			(
+				thisMin.x >= otherMin.x
+				&& thisMin.x <= otherMax.x
+			)
+			||
+			(
+				thisMax.x >= otherMin.x
+				&& thisMax.x <= otherMax.x
+			)
+			||
+			(
+				otherMin.x >= thisMin.x
+				&& otherMin.x <= thisMax.x
+			)
+			||
+			(
+				otherMax.x >= thisMin.x
+				&& otherMax.x <= thisMax.x
+			)
+		);
+
+		var doOverlapInY =
+		(
+			(
+				thisMin.y >= otherMin.y
+				&& thisMin.y <= otherMax.y
+			)
+			||
+			(
+				thisMax.y >= otherMin.y
+				&& thisMax.y <= otherMax.y
+			)
+			||
+			(
+				otherMin.y >= thisMin.y
+				&& otherMin.y <= thisMax.y
+			)
+			||
+			(
+				otherMax.y >= thisMin.y
+				&& otherMax.y <= thisMax.y
+			)
+		);
+
+		var doOverlap = (doOverlapInX && doOverlapInY);
+
+		return doOverlap;
+	}
+
+	max()
+	{
+		return this._max.overwriteWith(this.center).add(this._sizeHalf);
+	}
+
+	min()
+	{
+		return this._min.overwriteWith(this.center).subtract(this._sizeHalf);
+	}
+}
+
+class Color
+{
+	constructor(name, systemColor)
+	{
+		this.name = name;
+		this.systemColor = systemColor;
+	}
+
+	static byName(name)
+	{
+		return Color.Instances().byName(name);
+	}
+
+	static Instances()
+	{
+		if (Color._instances == null)
+		{
+			Color._instances = new Color_Instances();
+		}
+		return Color._instances;
+	}
+}
+
+class Color_Instances
+{
+	constructor()
+	{
+		this.Black = new Color("Black", "Black");
+		this.Blue = new Color("Blue", "Blue");
+		this.Gray = new Color("Gray", "Gray");
+		this.Green = new Color("Green", "Green");
+		this.Red = new Color("Red", "Red");
+		this.White = new Color("White", "White");
+		this.Yellow = new Color("Yellow", "Yellow");
+
+		this._All =
+		[
+			this.Black,
+			this.Blue,
+			this.Gray,
+			this.Green,
+			this.Red,
+			this.White,
+			this.Yellow
+		];
+
+		this._AllByName = new Map(this._All.map(x => [x.name, x]) );
+	}
+
+	byName(name)
+	{
+		return this._AllByName.get(name);
+	}
+}
+
+class Coords
+{
+	constructor(x, y)
+	{
+		this.x = x;
+		this.y = y;
+	}
+
+	static fromHeadingInTurns(headingInTurns)
+	{
+		var headingInRadians = headingInTurns * Math.PI * 2;
+		var returnValue = new Coords
+		(
+			Math.cos(headingInRadians), Math.sin(headingInRadians)
+		);
+		return returnValue;
+	}
+
+	static ones()
+	{
+		return new Coords(1, 1);
+	}
+
+	static zeroes()
+	{
+		return new Coords(0, 0);
+	}
+
+	add(other)
+	{
+		this.x += other.x;
+		this.y += other.y;
+		return this;
+	}
+
+	addXY(x, y)
+	{
+		this.x += x;
+		this.y += y;
+		return this;
+	}
+
+	clone()
+	{
+		return new Coords(this.x, this.y);
+	}
+
+	divideScalar(scalar)
+	{
+		this.x /= scalar;
+		this.y /= scalar;
+		return this;
+	}
+
+	half()
+	{
+		return this.divideScalar(2);
+	}
+
+	invert()
+	{
+		return this.multiplyScalar(-1);
+	}
+
+	isInRangeMax(max)
+	{
+		return this.isInRangeMinMax(Coords.zeroes(), max);
+	}
+
+	isInRangeMinMax(min, max)
+	{
+		var isInRange =
+		(
+			this.x >= min.x
+			&& this.x <= max.x
+			&& this.y >= min.y
+			&& this.y <= max.y
+		);
+
+		return isInRange;
+	}
+
+	magnitude()
+	{
+		return Math.sqrt(this.x * this.x + this.y * this.y);
+	}
+
+	multiply(other)
+	{
+		this.x *= other.x;
+		this.y *= other.y;
+		return this;
+	}
+
+	multiplyScalar(scalar)
+	{
+		this.x *= scalar;
+		this.y *= scalar;
+		return this;
+	}
+
+	normalize()
+	{
+		return this.divideScalar(this.magnitude() );
+	}
+
+	overwriteWith(other)
+	{
+		this.x = other.x;
+		this.y = other.y;
+		return this;
+	}
+
+	subtract(other)
+	{
+		this.x -= other.x;
+		this.y -= other.y;
+		return this;
+	}
+
+	trimToRangeMax(max)
+	{
+		return this.trimToRangeMinMax(Coords.zeroes(), max);
+	}
+
+	trimToRangeMinMax(min, max)
+	{
+		if (this.x < min.x)
+		{
+			this.x = min.x;
+		}
+		else if (this.x > max.x)
+		{
+			this.x = max.x;
+		}
+
+		if (this.y < min.y)
+		{
+			this.y = min.y;
+		}
+		else if (this.y > max.y)
+		{
+			this.y = max.y;
+		}
+
+		return this;
+	}
+}
+
+class Display
+{
+	constructor(sizeInPixels)
+	{
+		this.sizeInPixels = sizeInPixels;
+
+		this._drawPos = Coords.zeroes();
+		this._zeroes = Coords.zeroes();
+	}
+
+	initialize()
+	{
+		var d = document;
+		var canvas = d.createElement("canvas");
+		canvas.width = this.sizeInPixels.x;
+		canvas.height = this.sizeInPixels.y;
+
+		this.graphics = canvas.getContext("2d");
+
+		var divDisplay = d.getElementById("divDisplay");
+		divDisplay.appendChild(canvas);
+	}
+
+	// Draw.
+
+	clear()
+	{
+		this.drawRectangleAtPosWithSizeAndColor
+		(
+			this._zeroes, this.sizeInPixels, Color.Instances().Black
+		);
+	}
+
+	drawRectangleAtPosWithSizeAndColor(pos, size, color)
+	{
+		this.graphics.fillStyle = color.systemColor;
+		this.graphics.fillRect
+		(
+			pos.x, pos.y, size.x, size.y
+		);
+	}
+
+	drawRectangleWithCenterSizeAndColor(center, size, color)
+	{
+		var drawPos =
+			this._drawPos.overwriteWith(size).half().invert().add(center);
+
+		this.drawRectangleAtPosWithSizeAndColor(drawPos, size, color);
+	}
+}
+
+class Disposition
+{
+	constructor(headingInTurns, pos)
+	{
+		this.headingInTurns = headingInTurns;
+		this.pos = pos;
+	}
+
+	clone()
+	{
+		return new Disposition(this.headingInTurns, this.pos.clone() );
+	}
+
+	headingAsCoords()
+	{
+		return Coords.fromHeadingInTurns(this.headingInTurns);
+	}
+}
+
+class InputTracker
+{
+	constructor()
+	{
+		this.keysPressed = [];
+	}
+
+	initialize()
+	{
+		var d = document;
+		d.onkeydown = this.handleEventKeyDown.bind(this);
+		d.onkeyup = this.handleEventKeyUp.bind(this);
+	}
+
+	keyRelease(key)
+	{
+		var keyIndex = this.keysPressed.indexOf(key);
+		if (keyIndex >= 0)
+		{
+			this.keysPressed.splice
+			(
+				keyIndex, 1	
+			);
+		}
+	}
+
+	// Events.
+
+	handleEventKeyDown(e)
+	{
+		var key = e.key;
+		if (this.keysPressed.indexOf(key) == -1)
+		{
+			this.keysPressed.push(key);
+		}
+	}
+
+	handleEventKeyUp(e)
+	{
+		this.keyRelease(e.key);
+	}
+}
+
+class Mover
+{
+	constructor(id, defnName, disp)
+	{
+		this.id = id;
+		this.defnName = defnName;
+		this.disp = disp;
+	}
+
+	activityDefn()
+	{
+		var defn = this.defn();
+		var activityDefn = defn.activityDefn();
+		return activityDefn;
+	}
+
+	bounds()
+	{
+		if (this._bounds == null)
+		{
+			this._bounds = Bounds.fromCenterAndSize
+			(
+				this.disp.pos, this.defn().size
+			);
+		}
+
+		return this._bounds;
+	}
+
+	defn()
+	{
+		return MoverDefn.byName(this.defnName);
+	}
+
+	drawToDisplay(display)
+	{
+		var defn = this.defn();
+		var visual = defn.visual();
+		visual.drawToDisplayAtPos(display, this.disp.pos);
+	}
+
+	initialize()
+	{
+		this.integrity = this.defn().integrityMax;
+	}
+
+	updateForTimerTick(universe, world, place)
+	{
+		var activityDefn = this.activityDefn();
+		activityDefn.perform(universe, world, place, this);
+	}
+}
+
+class MoverDefn
+{
+	constructor
+	(
+		name,
+		integrityMax,
+		speed,
+		size,
+		visualName,
+		activityDefnName
+	)
+	{
+		this.name = name;
+		this.speed = speed;
+		this.size = size;
+		this.integrityMax = integrityMax;
+		this.visualName = visualName;
+		this.activityDefnName = activityDefnName;
+	}
+
+	static byName(name)
+	{
+		return MoverDefn.Instances().byName(name);
+	}
+
+	static Instances()
+	{
+		if (MoverDefn._instances == null)
+		{
+			MoverDefn._instances = new MoverDefn_Instances();
+		}
+		return MoverDefn._instances;
+	}
+
+	activityDefn()
+	{
+		return ActivityDefn.byName(this.activityDefnName);
+	}
+
+	visual()
+	{
+		return Visual.byName(this.visualName);
+	}
+}
+
+class MoverDefn_Instances
+{
+	constructor()
+	{
+		var activityDefns = ActivityDefn.Instances();
+		var visuals = Visual.Instances();
+
+		var sizeShip = new Coords(16, 16);
+		var sizeProjectile = new Coords(2, 2);
+
+		this.EnemyBoss = new MoverDefn
+		(
+			"EnemyBoss",
+			20, // integrityMax
+			1, // speed
+			sizeShip,
+			visuals.EnemyBoss.name, // visualName
+			activityDefns.StayAtTopCenterShooting.name
+		);
+
+		this.EnemyCharger = new MoverDefn
+		(
+			"EnemyCharger",
+			1, // integrityMax
+			4, // speed
+			sizeShip,
+			visuals.EnemyCharger.name,
+			activityDefns.MoveForward.name
+		);
+
+		this.Player = new MoverDefn
+		(
+			"Player",
+			1, // integrityMax
+			4, // speed
+			sizeShip,
+			visuals.Player.name,
+			activityDefns.UserInputAccept.name
+		);
+
+		this.Projectile = new MoverDefn
+		(
+			"Projectile",
+			1, // integrityMax
+			8, // speed,
+			sizeProjectile,
+			visuals.Projectile.name,
+			activityDefns.MoveForward.name
+		);
+
+		this._All =
+		[
+			this.EnemyBoss,
+			this.EnemyCharger,
+			this.Player,
+			this.Projectile
+		];
+
+		this._AllByName = new Map(this._All.map(x => [x.name, x]) );
+	}
+
+	byName(name)
+	{
+		return this._AllByName.get(name);
+	}
+}
+
+class MoverSpawning
+{
+	constructor
+	(
+		secondToSpawnAt,
+		moverDefnName,
+		disp
+	)
+	{
+		this.secondToSpawnAt = secondToSpawnAt;
+		this.moverDefnName = moverDefnName;
+		this.disp = disp;
+	}
+
+	spawn(universe, world, place)
+	{
+		var mover = new Mover
+		(
+			place.moverIdMaxSoFar++, // id
+			this.moverDefnName,
+			this.disp.clone()
+		);
+
+		mover.initialize(universe, world, place);
+
+		place.movers.push(mover);
+	}
+}
+
+class PlaceLevel
+{
+	constructor(name, size, moverSpawnings)
+	{
+		this.name = name;
+		this.size = size;
+		this.moverSpawnings = moverSpawnings;
+
+		this.ticksSoFar = 0;
+		this.moverIdMaxSoFar = 0;
+
+		var moverForPlayer = new Mover
+		(
+			0, // id
+			"Player",
+			new Disposition
+			(
+				.75, // heading
+				new Coords(.5, .8).multiply(this.size)
+			)
+		);
+		this.movers = [ moverForPlayer ];
+	}
+
+	static demo()
+	{
+		var placeSize = new Coords(400, 300);
+
+		var place = PlaceLevel.fromNameSizeAndSpawningCount
+		(
+			"Place0",
+			placeSize,
+			5 // spawnCount
+		);
+
+		var spawnings = place.moverSpawnings;
+		var spawningFinal = spawnings[spawnings.length - 1];
+		var spawningDisp =
+			new Disposition(.25, new Coords(.5, 0).multiply(place.size) );
+
+		var spawningBoss = new MoverSpawning
+		(
+			spawningFinal.secondToSpawnAt + 3,
+			MoverDefn.Instances().EnemyBoss.name,
+			spawningDisp
+		);
+
+		spawnings.push(spawningBoss);
+
+		return place
+	}
+
+	static fromNameSizeAndSpawningCount(name, size, spawningCount)
+	{
+		var spawnings = [];
+
+		var moverDefn = MoverDefn.Instances().EnemyCharger;
+
+		var spawnDispRandom = () => new Disposition
+		(
+			.25,
+			new Coords
+			(
+				Math.random(), 0
+			).multiply(size)
+		);
+
+		var spawnings = [];
+
+		for (var i = 0; i < spawningCount; i++)
+		{
+			var spawning = new MoverSpawning
+			(
+				i + 1,
+				moverDefn.name,
+				spawnDispRandom()
+			);
+
+			spawnings.push(spawning);
+		}
+
+		return new PlaceLevel
+		(
+			name, size, spawnings
+		);
+
+	}
+
+	drawToDisplay(display)
+	{
+		display.clear();
+		this.movers.forEach(x => x.drawToDisplay(display) );
+	}
+
+	initialize(universe, world)
+	{
+		this.movers.forEach(x => x.initialize(universe, world, this) );
+	}
+
+	moverRemove(mover)
+	{
+		this.movers.splice(this.movers.indexOf(mover), 1);
+	}
+
+	secondsSoFar(universe)
+	{
+		return universe.timerHelper.secondsForTicks(this.ticksSoFar);
+	}
+
+	updateForTimerTick(universe, world)
+	{
+		var secondsSoFar = this.secondsSoFar(universe);
+
+		var spawningsThisTick = this.moverSpawnings.filter
+		(
+			x => x.secondToSpawnAt < secondsSoFar
+		);
+
+		spawningsThisTick.forEach
+		(
+			x =>
+			{
+				x.spawn(universe, world, this);
+				this.moverSpawnings.splice
+				(
+					this.moverSpawnings.indexOf(x), 1
+				);
+			}
+		);
+
+		this.movers.forEach
+		(
+			x => x.updateForTimerTick(universe, world, this, x)
+		);
+
+		var moversProjectile = this.movers.filter(x => x.defnName == "Projectile");
+		var moversNonProjectile = this.movers.filter(x => x.defnName != "Projectile");
+
+		moversProjectile.forEach
+		(
+			moverProjectile =>
+			{
+				moversNonProjectile.forEach
+				(
+					moverNonProjectile =>
+					{
+						var moverNonProjectileBounds = moverNonProjectile.bounds();
+						var doMoversCollide = moverNonProjectileBounds.containsPoint
+						(
+							moverProjectile.disp.pos
+						);
+						if (doMoversCollide)
+						{
+							this.moverRemove(moverProjectile);
+
+							moverNonProjectile.integrity -= 1;
+							if (moverNonProjectile.integrity <= 0)
+							{
+								this.moverRemove(moverNonProjectile);
+							}
+						}
+					}
+				)
+			}
+		);
+
+		var moverPlayer = this.movers.find(x => x.defnName == "Player");
+		if (moverPlayer != null)
+		{
+			var moverPlayerBounds = moverPlayer.bounds();
+			var moversEnemy = this.movers.filter(x => x.defnName.startsWith("Enemy") );
+
+			moversEnemy.forEach
+			(
+				moverEnemy =>
+				{
+					var moverEnemyBounds = moverEnemy.bounds();
+					var doMoversCollide = moverEnemyBounds.overlapWith
+					(
+						moverPlayerBounds
+					);
+					if (doMoversCollide)
+					{
+						// todo - Integrity.
+						this.moverRemove(moverPlayer);
+						this.moverRemove(moverEnemy);
+					}
+
+				}
+			);
+		}
+
+		this.ticksSoFar++;
+
+		this.drawToDisplay(universe.display);
+	}
+}
+
+class TimerHelper
+{
+	constructor(ticksPerSecond)
+	{
+		this.ticksPerSecond = ticksPerSecond;
+
+		this.millisecondsPerTick = Math.round
+		(
+			1000 / this.ticksPerSecond
+		);
+	}
+
+	initialize(universe)
+	{
+		this.systemTimer = setInterval
+		(
+			() => universe.updateForTimerTick(),
+			this.millisecondsPerTick
+		);
+	}
+
+	secondsForTicks(ticks)
+	{
+		return ticks / this.ticksPerSecond;
+	}
+}
+
+class Universe
+{
+	constructor
+	(
+		display,
+		inputTracker,
+		timerHelper,
+		world
+	)
+	{
+		this.display = display;
+		this.inputTracker = inputTracker;
+		this.timerHelper = timerHelper;
+		this.world = world;
+	}
+
+	static demo()
+	{
+		var display = new Display(new Coords(400, 300) );
+		var inputTracker = new InputTracker();
+		var timerHelper = new TimerHelper(24);
+		var world = World.demo();
+
+		return new Universe
+		(
+			display,
+			inputTracker,
+			timerHelper,
+			world
+		);
+	}
+
+	initialize()
+	{
+		this.display.initialize();
+		this.inputTracker.initialize();
+		this.timerHelper.initialize(this);
+
+		this.world.initialize();
+	}
+
+	updateForTimerTick()
+	{
+		this.world.updateForTimerTick(this);
+	}
+}
+
+class Visual
+{
+	constructor(name, colorName, size)
+	{
+		this.name = name;
+		this.colorName = colorName;
+		this.size = size;
+	}
+
+	static byName(name)
+	{
+		return Visual.Instances().byName(name);
+	}
+
+	static Instances()
+	{
+		if (Visual._instances == null)
+		{
+			Visual._instances = new Visual_Instances();
+		}
+		return Visual._instances;
+	}
+
+	color()
+	{
+		return Color.byName(this.colorName);
+	}
+
+	drawToDisplayAtPos(display, pos)
+	{
+		display.drawRectangleWithCenterSizeAndColor
+		(
+			pos, this.size, this.color()
+		);
+	}
+}
+
+class Visual_Instances
+{
+	constructor()
+	{
+		this.EnemyBoss = new Visual
+		(
+			"EnemyBoss",
+			"Red",
+			new Coords(48, 48) // size
+		);
+
+		this.EnemyCharger = new Visual
+		(
+			"EnemyCharger",
+			"Red",
+			new Coords(16, 16) // size
+		);
+
+		this.Player = new Visual
+		(
+			"Player",
+			"Gray",
+			new Coords(16, 16) // size
+		);
+
+		this.Projectile = new Visual
+		(
+			"Projectile",
+			"Yellow",
+			new Coords(2, 2) // size
+		);
+
+		this._All =
+		[
+			this.EnemyBoss,
+			this.EnemyCharger,
+			this.Player,
+			this.Projectile
+		];
+
+		this._AllByName = new Map(this._All.map(x => [x.name, x]) );
+	}
+
+	byName(name)
+	{
+		return this._AllByName.get(name);
+	}
+}
+
+class World
+{
+	constructor(name, places)
+	{
+		this.name = name;
+		this.places = places;
+
+		this.placeCurrentIndex = 0;
+	}
+
+	static demo()
+	{
+		var ms =
+			(second, moverDefnName, disp) =>
+				new MoverSpawning(second, moverDefnName, disp);
+
+		var place = PlaceLevel.demo();
+
+		var world = new World
+		(
+			"World0",
+			[
+				place
+			]
+		);
+
+		return world;
+	}
+
+	initialize(universe)
+	{
+		this.places.forEach(x => x.initialize(universe, this) );
+	}
+
+	placeCurrent()
+	{
+		return this.places[this.placeCurrentIndex];
+	}
+
+	updateForTimerTick(universe)
+	{
+		var place = this.placeCurrent();
+		place.updateForTimerTick(universe, this);
+	}
+}
+
+// Run.
+
+new Game().run();
+
+</script>
+</body>
+</html>
